@@ -1,0 +1,242 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+}
+
+.container {
+    margin: 10%;
+    background-color: #fff;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1,
+h2 {
+    text-align: center;
+    color: #333;
+}
+
+form {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="file"] {
+    width: calc(100% - 22px);
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#imagePreviewContainer {
+    margin-top: 10px;
+    max-width: 300px;
+    position: relative;
+}
+
+#imagePreview {
+    width: 100%;
+    height: auto;
+    border: 1px solid #ccc;
+    display: block;
+}
+
+#removeImageButton {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: #ff4d4d;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+#removeImageButton:hover {
+    background-color: #ff1a1a;
+}
+
+.product-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.product {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    width: 200px;
+    background-color: #fafafa;
+    text-align: center;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    transition: opacity 0.3s;
+    position: relative;
+}
+
+.product img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+.product-info {
+    padding: 15px;
+}
+
+.product-info h3 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    color: #333;
+}
+
+.product-info .price {
+    font-size: 16px;
+    color: #777;
+}
+
+.product-info .purchase-price {
+    font-size: 14px;
+    color: #444;
+    display: none;
+}
+
+.product-info button {
+    margin-top: 10px;
+    padding: 5px 10px;
+    font-size: 14px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.product-sold,
+.product-edit {
+    text-align: left;
+    margin-top: 10px;
+}
+
+.btn {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    font-size: 16px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.btn:hover {
+    background-color: #0056b3;
+}
+
+
+.admin-section {
+    margin-top: 50px;
+    background-color: #eaeaea;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.sold-item {
+    opacity: 0.5;
+    background-color: #e0e0e0;
+    /* Color de fondo para items vendidos */
+    text-decoration: line-through;
+    /* Opcional: tachar el texto */
+}
+
+.delete-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #ff4d4d;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    padding: 5px;
+    cursor: pointer;
+}
+
+/* Botón de exportar */
+#exportButton {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    font-size: 16px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#exportButton:hover {
+    background-color: #0056b3;
+}
+
+/* Botón de exportar */
+#deleteAllButton {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    font-size: 16px;
+    color: #fff;
+    background-color: #ff0000;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#deleteAllButton:hover {
+    background-color: #b30027;
+}
+
+
+
+header {
+    background-color: #007bff;
+    color: #fff;
+    padding: 10px;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+header .btn {
+    font-size: 16px;
+    color: #fff;
+    background-color: #0056b3;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+header .btn:hover {
+    background-color: #004080;
+}
+
+.admin-only {
+    display: none;
+}

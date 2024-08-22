@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Productos</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+    <h1>Catálogo de Productos</h1>
+    <button id="loginButton" class="btn">Iniciar Sesión como Admin</button>
+</header>
+
+<div class="container">
+    <div class="admin-only">
+        <h1>Agregar Producto al Catálogo</h1>
+        <form id="productForm">
+            <label for="name">Nombre del Producto 🏷️</label>
+            <input type="text" id="name" required>
+        
+            <label for="salePrice">Precio de Venta 💵</label>
+            <input type="number" id="salePrice" required>
+        
+            <label for="purchasePrice">Precio de Compra (Oculto) 💸</label>
+            <input type="number" id="purchasePrice" required>
+        
+            <label for="image">Imagen del Producto 📷</label>
+            <input type="file" id="image" accept="image/*">
+            <div id="imagePreviewContainer">
+                <img id="imagePreview" src="" alt="Vista previa de la imagen" style="display: none;">
+                <button id="removeImageButton" style="display: none;">Eliminar Imagen ❌</button>
+
+            </div>
+        
+        
+            <button type="submit" class="btn admin-only">Agregar Producto</button>
+        </form>
+    </div>
+    
+    <div class="product-list" id="productList">
+        <!-- Productos serán agregados aquí -->
+    </div>
+
+    <button id="exportButton" class="btn admin-only">Exportar Catálogo</button>
+    <button id="importButton" class="btn admin-only">Importar Catálogo</button>
+    <button id="deleteAllButton" class="btn admin-only">Eliminar todo</button>
+
+    <div class="admin-section admin-only" id="adminSection">
+        <h2>Resumen de Ganancias</h2>
+        <p id="totalEarnings">Total Ventas 💰: $0</p>
+        <p id="potentialEarnings">Ganancias Potenciales 📈: $0</p>
+        <div id="realizedEarnings">Ganancias Realizadas 📊: $0</div>
+        <button id="logoutButton" class="btn">Cerrar Sesión</button>
+    </div>
+</div>
+
+<script src="script.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+</body>
+</html>
