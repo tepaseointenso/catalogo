@@ -1,7 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
-import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, getDoc, setDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { showLoading, hideLoading, showSuccess, showError } from './alerts.js';
+
 
 
 
@@ -25,6 +28,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+export const auth = getAuth(app);
 
 let totalEarnings = 0;
 let potentialEarnings = 0;
@@ -39,6 +43,10 @@ const storeName = 'images';
 // Initialize Firestore
 const firestoreDb = getFirestore(app);
 const storage = getStorage();
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({
+    prompt: 'select_account'
+});
 
 
 let db;
@@ -64,22 +72,19 @@ let dbReady = new Promise((resolve, reject) => {
 
 
 async function loadProductsFromFirestore() {
+    showLoading('Cargando productos...');
+
     try {
-        // Asegúrate de que Firestore esté inicializado
         await dbReady;
-
-        // Obtener todos los productos de Firestore
         const querySnapshot = await getDocs(collection(firestoreDb, "products"));
-        products = []; // Limpiar el array de productos existente
+        products = [];
 
-        // Mapear los datos de los documentos de Firestore a un array de productos
         querySnapshot.forEach((doc) => {
             const product = doc.data();
-            product.id = doc.id; // Agregar el ID del documento al producto
+            product.id = doc.id;
             products.push(product);
         });
 
-        // Agregar los productos al DOM
         products.forEach((product, index) => {
             addProductToDOM(product, index);
         });
@@ -88,8 +93,11 @@ async function loadProductsFromFirestore() {
         updatePotentialEarnings();
         updateEarnings();
 
+        showSuccess('Productos cargados exitosamente.');
     } catch (error) {
-        console.error('Error loading products from Firestore:', error);
+        showError('Error al cargar productos de Firestore: ' + error.message);
+    } finally {
+        hideLoading();
     }
 }
 
@@ -187,27 +195,47 @@ document.getElementById('productForm').addEventListener('submit', async function
 function addProductToDOM(product, index) {
     const productHtml = `
         <div class="product ${product.sold ? 'sold-item' : ''}" data-index="${index}">
-            <button class="delete-button btn admin-only" onclick="deleteProduct(${index})">×</button>
+            <button class="delete-button btn admin-only">×</button>
             <img src="${product.image}" alt="${product.name}">
             <div class="product-info">
                 <h3>${product.name}</h3>
                 <div class="price">Precio de Venta: $${product.salePrice}</div>
                 <div class="admin-only">
                     <div class="purchase-price">Precio de Compra: $${product.purchasePrice}</div>
-                    <button onclick="togglePurchasePrice(this)">Mostrar Precio de Compra</button>
+                    <button class="toggle-purchase-price">Mostrar Precio de Compra</button>
                     <div class="product-sold">
                         <label>
-                            <input type="checkbox" onchange="markAsSold(this, ${product.salePrice}, ${product.purchasePrice})" ${product.sold ? 'checked' : ''}> Marcar como vendido
+                            <input type="checkbox" ${product.sold ? 'checked' : ''}> Marcar como vendido
                         </label>
                     </div>
                     <div class="product-edit">
-                        <button onclick="editProduct(${index})">Editar Producto</button>
+                        <button class="edit-product">Editar Producto</button>
                     </div>
                 </div>
             </div>
         </div>
     `;
-    document.getElementById('productList').insertAdjacentHTML('beforeend', productHtml);
+    const productList = document.getElementById('productList');
+    productList.insertAdjacentHTML('beforeend', productHtml);
+
+    const productElement = productList.lastElementChild;
+    const deleteButton = productElement.querySelector('.delete-button');
+    const editButton = productElement.querySelector('.edit-product');
+    const toggleButton = productElement.querySelector('.toggle-purchase-price');
+    const checkbox = productElement.querySelector('.product-sold input[type="checkbox"]');
+
+    deleteButton.addEventListener('click', function () {
+        deleteProduct(index);
+    });
+    editButton.addEventListener('click', function () {
+        editProduct(index);
+    });
+    toggleButton.addEventListener('click', function () {
+        togglePurchasePrice(toggleButton);
+    });
+    checkbox.addEventListener('change', function () {
+        markAsSold(checkbox, product.salePrice, product.purchasePrice);
+    });
 }
 
 
@@ -243,12 +271,16 @@ function updateEarnings() {
     document.getElementById('totalEarnings').textContent = `Total Ventas 💰: $${totalEarnings}`;
 }
 
-function markAsSold(checkbox, salePrice, purchasePrice) {
+async function markAsSold(checkbox, salePrice, purchasePrice) {
     const productDiv = checkbox.closest('.product');
     const productIndex = parseInt(productDiv.getAttribute('data-index'));
     const product = products[productIndex];
+    const isSold = checkbox.checked;
 
-    if (checkbox.checked) {
+    console.log(product);
+
+    // Actualizar el estado del producto en el DOM
+    if (isSold) {
         productDiv.classList.add('sold-item');
         if (!product.sold) {
             product.sold = true;
@@ -262,10 +294,59 @@ function markAsSold(checkbox, salePrice, purchasePrice) {
         }
     }
 
-    updateEarnings();
-    updateRealizedEarnings();
-    saveProducts();
+    const productRef = doc(firestoreDb, "products", product.id);
+
+    // Mostrar SweetAlert de carga
+    const loadingAlert = Swal.fire({
+        title: 'Actualizando...',
+        text: 'Por favor, espere mientras se actualiza el producto.',
+        didOpen: () => {
+            Swal.showLoading();
+        },
+        allowOutsideClick: false, // Opcional: previene el cierre del alert haciendo clic fuera de él
+    });
+
+    try {
+        // Setear el campo como vendido
+        await updateDoc(productRef, {
+            sold: product.sold
+        });
+
+        console.log('Producto actualizado correctamente en Firestore.');
+        saveProducts();
+
+        // Ocultar SweetAlert de carga
+        loadingAlert.close();
+
+        // Actualizar las ganancias en el DOM
+        updateEarnings();
+        updateRealizedEarnings();
+    } catch (error) {
+        console.error('Error al actualizar el producto en Firestore:', error);
+
+        // Revertir el cambio en el DOM en caso de error
+        checkbox.checked = !isSold;
+        productDiv.classList.toggle('sold-item');
+        if (isSold) {
+            totalEarnings -= salePrice;
+            product.sold = false;
+        } else {
+            totalEarnings += salePrice;
+            product.sold = true;
+        }
+
+        // Ocultar SweetAlert de carga
+        loadingAlert.close();
+
+        // Mostrar mensaje de error
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo actualizar el producto. Intenta de nuevo.',
+        });
+    }
 }
+
 
 function updatePotentialEarnings() {
     potentialEarnings = products.reduce((acc, product) => acc + (product.salePrice - product.purchasePrice), 0);
@@ -441,14 +522,6 @@ const adminUsername = 'tepaseointenso';
 const adminPassword = '5408'; // Cambia esto por una contraseña más segura en producción
 
 document.addEventListener('DOMContentLoaded', function () {
-
-    const role = localStorage.getItem('role');
-    if (role === 'admin') {
-        showAdminFeatures();
-    } else {
-        hideAdminFeatures();
-    }
-
     // Inicializa la base de datos y carga productos
     dbReady.then(() => {
         loadProductsFromFirestore();
@@ -458,35 +531,74 @@ document.addEventListener('DOMContentLoaded', function () {
     }).catch(error => {
         console.error('Error initializing database:', error);
     });
-});
 
-document.getElementById('loginButton').addEventListener('click', function () {
-    const username = prompt('Usuario:');
-    const password = prompt('Contraseña:');
-    if (username === adminUsername && password === adminPassword) {
-        localStorage.setItem('role', 'admin');
-        showAdminFeatures();
-    } else {
-        alert('Usuario o contraseña incorrectos.');
+    // Verifica el estado de autenticación
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            showAdminFeatures();
+            displaySessionBanner(user);
+            document.getElementById('loginGoogle').style.display = 'none';
+            document.getElementById('sessionBanner').style.display = 'flex'; // Cambiado de 'block' a 'flex'
+        } else {
+            hideAdminFeatures();
+            hideSessionBanner();
+            document.getElementById('loginGoogle').style.display = 'block';
+            document.getElementById('sessionBanner').style.display = 'none';
+        }
+    });
+
+    document.getElementById('loginGoogle').addEventListener('click', () => {
+        // Código para iniciar sesión con Google
+    });
+
+    document.getElementById('logoutBannerButton').addEventListener('click', () => {
+        signOut(auth).then(() => {
+            console.log('Usuario cerrado sesión');
+            hideSessionBanner();
+            document.getElementById('loginGoogle').style.display = 'block';
+        }).catch((error) => {
+            console.error('Error al cerrar sesión:', error);
+        });
+    });
+
+    const toggleDropdownButton = document.getElementById('toggleDropdown');
+    if (toggleDropdownButton) {
+        toggleDropdownButton.addEventListener('click', () => {
+            const dropdownMenu = document.getElementById('dropdownMenu');
+            if (dropdownMenu) {
+                dropdownMenu.style.display = dropdownMenu.style.display === 'none' ? 'block' : 'none';
+            }
+        });
     }
 });
 
-function showAdminFeatures() {
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-    document.getElementById('loginButton').style.display = 'none';
+
+
+
+
+function displaySessionBanner(user) {
+    document.getElementById('userAvatar').src = user.photoURL || '';
+    document.getElementById('userName').textContent = user.displayName || 'Nombre Usuario';
+    document.getElementById('userEmail').textContent = user.email || 'usuario@example.com';
 }
 
-function hideAdminFeatures() {
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    document.getElementById('loginButton').style.display = 'block';
+function hideSessionBanner() {
+    document.getElementById('sessionBanner').style.display = 'none';
 }
 
-document.getElementById('logoutButton').addEventListener('click', function () {
-    alert('Has cerrado sesión.');
-    localStorage.removeItem('role');
-    hideAdminFeatures();
-    location.reload(); // Opcional: Recargar la página para actualizar la interfaz
+// Cerrar sesión en Firebase
+document.getElementById('logoutButton').addEventListener('click', async function () {
+    try {
+        await auth.signOut();
+        localStorage.removeItem('role');
+        hideAdminFeatures();
+        location.reload(); // Recargar la página para actualizar la interfaz
+    } catch (error) {
+        console.error('Error al cerrar sesión:', error);
+        alert('Hubo un problema al cerrar sesión.');
+    }
 });
+
 
 
 function encryptData(data, secretKey) {
@@ -584,6 +696,7 @@ document.getElementById('uploadButton').addEventListener('click', async () => {
 
 async function saveProductToFirestore(productData) {
     try {
+        showLoading('Guardando producto...');
         // Crear una referencia en Firebase Storage para la imagen
         const sanitizedFileName = sanitizeFileName(productData.name);
         const storageRef = ref(storage, `product-images/${sanitizedFileName}-${Date.now()}.jpg`);
@@ -606,8 +719,13 @@ async function saveProductToFirestore(productData) {
         addProductToDOM(productData);
         updatePotentialEarnings();
         saveProducts();
+
+        showSuccess('Producto guardado exitosamente.');
     } catch (error) {
         console.error('Error al guardar el producto en Firestore:', error);
+        showError('Error al guardar el producto.');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -616,3 +734,24 @@ function sanitizeFileName(fileName) {
     return fileName.replace(/[/\\?%*:|"<>]/g, '_'); // Reemplaza varios caracteres con '_'
 }
 
+
+function showAdminFeatures() {
+    console.log('Showing admin features');
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+}
+
+function hideAdminFeatures() {
+    console.log('Hiding admin features');
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+}
+
+
+document.getElementById('loginGoogle').addEventListener('click', async () => {
+    try {
+        await setPersistence(auth, browserLocalPersistence);
+        const result = await signInWithPopup(auth, provider);
+        location.reload();
+    } catch (error) {
+        showError('Error al iniciar sesión con Google: ' + error.message);
+    }
+});
