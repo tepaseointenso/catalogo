@@ -1,3 +1,31 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
+import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
+import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+
+
+
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+    apiKey: "AIzaSyAa0V2lzsYDn9shdWhq7YaremkNSxUxRY8",
+    authDomain: "catalogo-productos-cea29.firebaseapp.com",
+    databaseURL: "https://catalogo-productos-cea29-default-rtdb.firebaseio.com",
+    projectId: "catalogo-productos-cea29",
+    storageBucket: "catalogo-productos-cea29.appspot.com",
+    messagingSenderId: "255523564384",
+    appId: "1:255523564384:web:00d029adcee9969dff8c05",
+    measurementId: "G-Q0MVS403GB"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
 let totalEarnings = 0;
 let potentialEarnings = 0;
 let realizedEarnings = 0;
@@ -6,6 +34,12 @@ const secretKey = 'pichula';
 
 const dbName = 'productDB';
 const storeName = 'images';
+
+
+// Initialize Firestore
+const firestoreDb = getFirestore(app);
+const storage = getStorage();
+
 
 let db;
 let dbReady = new Promise((resolve, reject) => {
@@ -27,65 +61,38 @@ let dbReady = new Promise((resolve, reject) => {
     };
 });
 
-document.addEventListener('DOMContentLoaded', function () {
-    dbReady.then(() => {
-        loadProductsFromLocalStorage()
+
+
+async function loadProductsFromFirestore() {
+    try {
+        // Asegúrate de que Firestore esté inicializado
+        await dbReady;
+
+        // Obtener todos los productos de Firestore
+        const querySnapshot = await getDocs(collection(firestoreDb, "products"));
+        products = []; // Limpiar el array de productos existente
+
+        // Mapear los datos de los documentos de Firestore a un array de productos
+        querySnapshot.forEach((doc) => {
+            const product = doc.data();
+            product.id = doc.id; // Agregar el ID del documento al producto
+            products.push(product);
+        });
+
+        // Agregar los productos al DOM
+        products.forEach((product, index) => {
+            addProductToDOM(product, index);
+        });
+
         updateRealizedEarnings();
         updatePotentialEarnings();
         updateEarnings();
-    }).catch(error => {
-        console.error('Error initializing database:', error);
-    });
-});
 
-function loadProductsFromLocalStorage() {
-    dbReady.then(() => {
-        const productos = localStorage.getItem('products')
-        let decrypt = []
-        let storedProducts
-        if (productos) {
-            decrypt = decryptData(productos, secretKey)
-            storedProducts = JSON.parse(decrypt) || [];
-            products = storedProducts;
-        }
-        else {
-            products = []
-        }
-        console.log(decrypt)
-
-
-        // Primero, recupera todas las imágenes de IndexedDB
-        const transaction = db.transaction([storeName]);
-        const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.getAll(); // Obtener todas las imágenes
-
-        request.onsuccess = function () {
-            const images = request.result;
-            const imageMap = new Map();
-            images.forEach(imageData => imageMap.set(imageData.id, imageData.image));
-
-            // Asociar cada producto con su imagen y agregar al DOM
-            products.forEach((product, index) => {
-                // Buscar la imagen para el producto actual
-                const image = imageMap.get(product.imageId);
-                if (image) {
-                    product.image = image; // Asociar la imagen al producto
-                }
-                addProductToDOM(product, index);
-            });
-
-            updateRealizedEarnings();
-            updatePotentialEarnings();
-            updateEarnings();
-        };
-
-        request.onerror = function (event) {
-            console.error('Error retrieving images from IndexedDB:', event);
-        };
-    }).catch(error => {
-        console.error('Error initializing database:', error);
-    });
+    } catch (error) {
+        console.error('Error loading products from Firestore:', error);
+    }
 }
+
 
 document.getElementById('removeImageButton').addEventListener('click', function () {
     document.getElementById('image').value = ''; // Clear the file input
@@ -99,57 +106,56 @@ document.getElementById('image').addEventListener('change', handleImageChange);
 document.addEventListener('paste', handleImagePaste);
 
 
-function handleImageChange(event) {
+async function handleImageChange(event) {
     const file = event.target.files[0];
     if (file && file.type.startsWith('image/')) {
         const reader = new FileReader();
-        reader.onload = function (e) {
+        reader.onload = async function (e) {
             const imageData = e.target.result;
+            const compressedImageData = await compressImage(imageData);
 
-            // Solo actualiza la vista previa y el botón de eliminar
+            // Actualizar la vista previa y el botón de eliminar
             const imagePreview = document.getElementById('imagePreview');
-            imagePreview.src = imageData;
-            imagePreview.style.display = 'block'; // Show image preview
-            document.getElementById('removeImageButton').style.display = 'block'; // Show remove button
+            imagePreview.src = compressedImageData;
+            imagePreview.style.display = 'block'; // Mostrar vista previa
+            document.getElementById('removeImageButton').style.display = 'block'; // Mostrar botón de eliminar
         };
         reader.readAsDataURL(file);
     }
 }
 
-function handleImagePaste(event) {
+
+async function handleImagePaste(event) {
     const items = (event.clipboardData || event.originalEvent.clipboardData).items;
     for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith('image/')) {
             const file = items[i].getAsFile();
             const reader = new FileReader();
-            reader.onload = function (e) {
+
+            reader.onload = async function (e) {
                 const imageData = e.target.result;
 
-                // Solo actualiza la vista previa y el botón de eliminar
+                // Comprimir la imagen usando la función compressImage
+                const compressedImageData = await compressImage(imageData);
+
+                // Actualizar la vista previa y el botón de eliminar
                 const imagePreview = document.getElementById('imagePreview');
-                imagePreview.src = imageData;
-                imagePreview.style.display = 'block'; // Show image preview
-                document.getElementById('removeImageButton').style.display = 'block'; // Show remove button
+                imagePreview.src = compressedImageData;
+                imagePreview.style.display = 'block'; // Mostrar vista previa
+                document.getElementById('removeImageButton').style.display = 'block'; // Mostrar botón de eliminar
+
+                // Guarda la imagen comprimida en una variable global o estado si es necesario
+                window.pastedImageData = compressedImageData;
             };
+
             reader.readAsDataURL(file);
         }
     }
 }
 
 
-document.getElementById('deleteAllButton').addEventListener('click', function () {
-    if (confirm('¿Estás seguro de que quieres eliminar todos los productos?')) {
-        products = []; // Vacía el array de productos
-        document.getElementById('productList').innerHTML = ''; // Elimina todos los elementos del DOM
-        totalEarnings = 0; // Reinicia las ganancias totales
-        updateEarnings(); // Actualiza el DOM
-        updatePotentialEarnings(); // Actualiza el DOM
-        saveProducts(); // Guarda los cambios (vacío en este caso)
-        clearImagesFromDB(); // Limpia las imágenes de IndexedDB
-    }
-});
 
-document.getElementById('productForm').addEventListener('submit', function (event) {
+document.getElementById('productForm').addEventListener('submit', async function (event) {
     event.preventDefault();
 
     const name = document.getElementById('name').value;
@@ -157,37 +163,21 @@ document.getElementById('productForm').addEventListener('submit', function (even
     const purchasePrice = parseInt(document.getElementById('purchasePrice').value, 10);
     const image = document.getElementById('imagePreview').src;
 
-    if (image && image !== '' && image !== 'data:,') { // Validate image is not empty
-        // Guardar la imagen en IndexedDB
-        const transaction = db.transaction([storeName], 'readwrite');
-        const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.add({ image: image });
-
-        request.onsuccess = function () {
-            // Imagen guardada correctamente, ahora guardar el producto
-            const imageId = request.result; // Get the ID of the newly added image
-            const product = {
-                name,
-                salePrice,
-                purchasePrice,
-                image,
-                sold: false,
-                imageId // Assign the imageId to the product
-            };
-            products.push(product);
-            addProductToDOM(product);
-            updatePotentialEarnings();
-            saveProducts();
-
-            // Resetear el formulario y ocultar la vista previa de la imagen
-            document.getElementById('productForm').reset();
-            document.getElementById('imagePreview').style.display = 'none';
-            document.getElementById('removeImageButton').style.display = 'none';
+    if (image && image !== '' && image !== 'data:,') {
+        const productData = {
+            name,
+            salePrice,
+            purchasePrice,
+            image, // Guardar la imagen como data URL
+            sold: false
         };
 
-        request.onerror = function (event) {
-            console.error('Error saving image to IndexedDB:', event);
-        };
+        await saveProductToFirestore(productData);
+
+        // Resetear el formulario y ocultar la vista previa de la imagen
+        document.getElementById('productForm').reset();
+        document.getElementById('imagePreview').style.display = 'none';
+        document.getElementById('removeImageButton').style.display = 'none';
     } else {
         alert('Por favor, selecciona o pega una imagen válida.');
     }
@@ -461,7 +451,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Inicializa la base de datos y carga productos
     dbReady.then(() => {
-        loadProductsFromLocalStorage();
+        loadProductsFromFirestore();
         updateRealizedEarnings();
         updatePotentialEarnings();
         updateEarnings();
@@ -498,6 +488,7 @@ document.getElementById('logoutButton').addEventListener('click', function () {
     location.reload(); // Opcional: Recargar la página para actualizar la interfaz
 });
 
+
 function encryptData(data, secretKey) {
     return CryptoJS.AES.encrypt(JSON.stringify(data), secretKey).toString();
 }
@@ -506,3 +497,122 @@ function decryptData(encryptedData, secretKey) {
     const bytes = CryptoJS.AES.decrypt(encryptedData, secretKey);
     return JSON.parse(bytes.toString(CryptoJS.enc.Utf8))
 }
+
+async function compressImage(imageData, maxWidth = 800, maxHeight = 600, quality = 0.7) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = imageData;
+        img.onload = function () {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width *= maxHeight / height;
+                    height = maxHeight;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedImageData = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedImageData);
+        };
+    });
+}
+
+
+function dataURLtoFile(dataUrl, fileName) {
+    const arr = dataUrl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], fileName, { type: mime });
+}
+
+document.getElementById('uploadButton').addEventListener('click', async () => {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('Por favor, selecciona un archivo JSON.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            const products = JSON.parse(data.products);
+            const images = data.images;
+
+
+
+            for (let i = 0; i < images.length; i++) {
+                let imgData = images[i].image;
+                let compressedImg = await compressImage(imgData);
+                for (let product of products) {
+                    if (product.imageId === images[i].id) {
+                        product.image = compressedImg;
+
+                    }
+                }
+            }
+
+            for (let product of products) {
+                await saveProductToFirestore(product)
+            }
+
+            alert('Productos y imágenes subidos correctamente.');
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Hubo un error al procesar el archivo.');
+        }
+    };
+    reader.readAsText(file);
+});
+
+async function saveProductToFirestore(productData) {
+    try {
+        // Crear una referencia en Firebase Storage para la imagen
+        const sanitizedFileName = sanitizeFileName(productData.name);
+        const storageRef = ref(storage, `product-images/${sanitizedFileName}-${Date.now()}.jpg`);
+
+        // Subir la imagen a Firebase Storage
+        await uploadString(storageRef, productData.image, 'data_url');
+
+        // Obtener la URL de descarga de la imagen
+        const imageUrl = await getDownloadURL(storageRef);
+
+        // Guardar la URL de la imagen y otros datos en Firestore
+        productData.image = imageUrl; // Guardar la URL de la imagen en lugar de la imagen en sí
+
+        const docRef = await addDoc(collection(firestoreDb, "products"), productData);
+        console.log("Producto agregado con ID: ", docRef.id);
+
+        // Puedes agregar la ID del documento a tu producto si es necesario
+        productData.id = docRef.id;
+        products.push(productData);
+        addProductToDOM(productData);
+        updatePotentialEarnings();
+        saveProducts();
+    } catch (error) {
+        console.error('Error al guardar el producto en Firestore:', error);
+    }
+}
+
+function sanitizeFileName(fileName) {
+    // Reemplaza caracteres problemáticos en el nombre del archivo
+    return fileName.replace(/[/\\?%*:|"<>]/g, '_'); // Reemplaza varios caracteres con '_'
+}
+

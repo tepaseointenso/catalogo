@@ -45,7 +45,6 @@
 
     <button id="exportButton" class="btn admin-only">Exportar Catálogo</button>
     <button id="importButton" class="btn admin-only">Importar Catálogo</button>
-    <button id="deleteAllButton" class="btn admin-only">Eliminar todo</button>
 
     <div class="admin-section admin-only" id="adminSection">
         <h2>Resumen de Ganancias</h2>
@@ -53,10 +52,15 @@
         <p id="potentialEarnings">Ganancias Potenciales 📈: $0</p>
         <div id="realizedEarnings">Ganancias Realizadas 📊: $0</div>
         <button id="logoutButton" class="btn">Cerrar Sesión</button>
+        <input type="file" id="fileInput" accept=".json">
+<button id="uploadButton" class="btn">Cargar y Subir Productos</button>
+
     </div>
 </div>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
+<!-- <script type="module" src="nuevo.js"></script> -->
+<!-- <script type="module" src="firebase.js"></script> -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
 </body>
