@@ -521,6 +521,7 @@ function handleFileSelect(event) {
 const adminUsername = 'tepaseointenso';
 const adminPassword = '5408'; // Cambia esto por una contraseña más segura en producción
 
+
 document.addEventListener('DOMContentLoaded', function () {
     // Inicializa la base de datos y carga productos
     dbReady.then(() => {
@@ -533,32 +534,59 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Verifica el estado de autenticación
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         if (user) {
-            showAdminFeatures();
-            displaySessionBanner(user);
-            document.getElementById('loginGoogle').style.display = 'none';
-            document.getElementById('sessionBanner').style.display = 'flex'; // Cambiado de 'block' a 'flex'
+            try {
+                // Referencia al documento del usuario en Firestore
+                const userDocRef = doc(firestoreDb, "users", user.uid);
+                const userDoc = await getDoc(userDocRef);
+
+                if (!userDoc.exists()) {
+                    // Obtener el objeto user en formato JSON y agregar el campo 'role'
+                    const userData = {
+                        email: user.email,
+                        displayName: user.displayName,
+                        photoURL: user.photoURL,
+                        uid: user.uid,
+                        role: 'user'  // Asignar el rol por defecto
+                    };
+
+                    // Agregar el usuario a Firestore
+                    await setDoc(userDocRef, userData);
+                }
+
+                // Verificar el rol del usuario para mostrar/ocultar características administrativas
+                const userData = userDoc.exists() ? userDoc.data() : (await getDoc(userDocRef)).data();
+                if (userData.role === 'admin') {
+                    showAdminFeatures();
+                } else {
+                    hideAdminFeatures();
+                }
+
+                // Mostrar el banner de sesión
+                displaySessionBanner(user);
+                showSessionBanner();
+                hideLoginButton();
+            } catch (error) {
+                console.error('Error getting or creating user:', error);
+                hideAdminFeatures();
+            }
         } else {
             hideAdminFeatures();
             hideSessionBanner();
-            document.getElementById('loginGoogle').style.display = 'block';
-            document.getElementById('sessionBanner').style.display = 'none';
+            showLoginButton();
         }
     });
 
-    document.getElementById('loginGoogle').addEventListener('click', () => {
-        // Código para iniciar sesión con Google
-    });
-
-    document.getElementById('logoutBannerButton').addEventListener('click', () => {
-        signOut(auth).then(() => {
+    document.getElementById('logoutBannerButton').addEventListener('click', async () => {
+        try {
+            await auth.signOut();
             console.log('Usuario cerrado sesión');
             hideSessionBanner();
-            document.getElementById('loginGoogle').style.display = 'block';
-        }).catch((error) => {
+            showLoginButton();
+        } catch (error) {
             console.error('Error al cerrar sesión:', error);
-        });
+        }
     });
 
     const toggleDropdownButton = document.getElementById('toggleDropdown');
@@ -573,17 +601,26 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 
-
-
-
 function displaySessionBanner(user) {
     document.getElementById('userAvatar').src = user.photoURL || '';
     document.getElementById('userName').textContent = user.displayName || 'Nombre Usuario';
     document.getElementById('userEmail').textContent = user.email || 'usuario@example.com';
 }
 
+function showSessionBanner() {
+    document.getElementById('sessionBanner').style.display = 'flex'; // Mostrar como un flex contenedor
+}
+
 function hideSessionBanner() {
     document.getElementById('sessionBanner').style.display = 'none';
+}
+
+function showLoginButton() {
+    document.getElementById('loginGoogle').style.display = 'block';
+}
+
+function hideLoginButton() {
+    document.getElementById('loginGoogle').style.display = 'none';
 }
 
 // Cerrar sesión en Firebase
