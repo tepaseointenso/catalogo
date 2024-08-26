@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
-import { getFirestore, collection, addDoc, getDocs, getDoc, setDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, getDoc, setDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { showLoading, hideLoading, showSuccess, showError } from './alerts.js';
 
@@ -170,13 +170,17 @@ document.getElementById('productForm').addEventListener('submit', async function
     const salePrice = parseInt(document.getElementById('salePrice').value, 10);
     const purchasePrice = parseInt(document.getElementById('purchasePrice').value, 10);
     const image = document.getElementById('imagePreview').src;
+    const referentialPrice = parseInt(document.getElementById('referentialPrice').value, 10);
+    const link = document.getElementById('link').value;
 
     if (image && image !== '' && image !== 'data:,') {
         const productData = {
             name,
             salePrice,
+            referentialPrice,
             purchasePrice,
-            image, // Guardar la imagen como data URL
+            image, // Guardar la imagen como data URL,
+            link,
             sold: false
         };
 
@@ -200,6 +204,8 @@ function addProductToDOM(product, index) {
             <div class="product-info">
                 <h3>${product.name}</h3>
                 <div class="price">Precio de Venta: $${product.salePrice}</div>
+                ${product.referentialPrice ? `<div class="price line-through">Precio referencial: $${product.referentialPrice}</div>` : ''}
+            ${product.link ? `<button class="btn btn-link" onclick="window.open('${product.link}', '_blank')">Ver Producto Referencial</button>` : ''}
                 <div class="admin-only">
                     <div class="purchase-price">Precio de Compra: $${product.purchasePrice}</div>
                     <button class="toggle-purchase-price">Mostrar Precio de Compra</button>
@@ -400,19 +406,50 @@ function deleteProduct(index) {
     console.log('Índice de producto:', index);
     if (index >= 0 && index < products.length) {
         if (confirm('¿Estás seguro de que quieres eliminar este producto?')) {
-            const productDiv = document.querySelector(`.product[data-index="${index}"]`);
             const product = products[index];
-            if (product.sold) {
-                totalEarnings -= product.salePrice;
-            }
-            products.splice(index, 1);
-            if (productDiv) {
-                productDiv.remove();
-            }
-            updatePotentialEarnings();
-            updateEarnings();
-            updateRealizedEarnings();
-            saveProducts();
+            const productId = product.id; // ID del documento en Firestore
+
+            // Mostrar SweetAlert de carga
+            const loadingAlert = Swal.fire({
+                title: 'Eliminando...',
+                text: 'Por favor, espere mientras se elimina el producto.',
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+                allowOutsideClick: false,
+            });
+
+            // Eliminar el documento en Firestore
+            const productRef = doc(firestoreDb, "products", productId);
+            deleteDoc(productRef)
+                .then(() => {
+                    // Eliminar el producto de la lista en la interfaz
+                    products.splice(index, 1);
+                    const productDiv = document.querySelector(`.product[data-index="${index}"]`);
+                    if (productDiv) {
+                        productDiv.remove();
+                    }
+
+                    // Actualizar las ganancias y la lista de productos
+                    if (product.sold) {
+                        totalEarnings -= product.salePrice;
+                    }
+                    updatePotentialEarnings();
+                    updateEarnings();
+                    updateRealizedEarnings();
+                    saveProducts();
+
+                    // Ocultar SweetAlert de carga
+                    loadingAlert.close();
+                    showSuccess('Producto eliminado exitosamente.');
+                })
+                .catch((error) => {
+                    console.error('Error al eliminar el producto de Firestore:', error);
+
+                    // Ocultar SweetAlert de carga
+                    loadingAlert.close();
+                    showError('No se pudo eliminar el producto. Intenta de nuevo.');
+                });
         }
     } else {
         console.error('Índice de producto no válido:', index);
