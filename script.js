@@ -360,27 +360,46 @@ function updatePotentialEarnings() {
 }
 
 function editProduct(index) {
-    const product = products[index];
-    const name = prompt('Nombre del Producto:', product.name);
-    const salePrice = parseInt(prompt('Precio de Venta:', product.salePrice), 10);
-    const purchasePrice = parseInt(prompt('Precio de Compra:', product.purchasePrice), 10);
+    const product = products[index]; // Obtén el producto basado en el índice
 
-    if (name && !isNaN(salePrice) && !isNaN(purchasePrice)) {
-        product.name = name;
-        product.salePrice = salePrice;
-        product.purchasePrice = purchasePrice;
+    Swal.fire({
+        title: 'Editar Producto',
+        html: `
+            <input type="text" id="productName" class="swal2-input" placeholder="Nombre" value="${product.name}">
+            <input type="number" id="salePrice" class="swal2-input" placeholder="Precio de Venta" value="${product.salePrice}">
+            <input type="number" id="purchasePrice" class="swal2-input" placeholder="Precio de Compra" value="${product.purchasePrice}">
+            <input type="number" id="referentialPrice" class="swal2-input" placeholder="Precio Referencial" value="${product.referentialPrice || ''}">
+            <input type="url" id="link" class="swal2-input" placeholder="Link del Producto Referencial" value="${product.link || ''}">
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        preConfirm: () => {
+            const name = document.getElementById('productName').value.trim();
+            const salePrice = document.getElementById('salePrice').value.trim() || product.salePrice;
+            const purchasePrice = document.getElementById('purchasePrice').value.trim() || product.purchasePrice;
+            const referentialPrice = document.getElementById('referentialPrice').value.trim() || product.referentialPrice || '';
+            const link = document.getElementById('link').value.trim() || product.link || '';
 
-        const productDiv = document.querySelector(`.product[data-index="${index}"]`);
-        if (productDiv) {
-            productDiv.querySelector('h3').textContent = name;
-            productDiv.querySelector('.price').textContent = `Precio de Venta: $${salePrice}`;
-            productDiv.querySelector('.purchase-price').textContent = `Precio de Compra: $${purchasePrice}`;
+            return {
+                name,
+                salePrice: salePrice,
+                purchasePrice: purchasePrice,
+                referentialPrice: referentialPrice ? parseFloat(referentialPrice) : null,
+                link: link ? link : null
+            };
         }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const updatedProduct = result.value;
+            console.log(updatedProduct)
+            // Actualiza el producto en Firebase
+            const productRef = doc(firestoreDb, "products", product.id);
+            await updateDoc(productRef, updatedProduct)
+            Swal.fire('Actualizado', 'El producto ha sido actualizado correctamente.', 'success');
+            // location.reload()
 
-        updatePotentialEarnings();
-        updateEarnings();
-        saveProducts();
-    }
+        }
+    });
 }
 function clearImagesFromDB() {
     if (!db) {
